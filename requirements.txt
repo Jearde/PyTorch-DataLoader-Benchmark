@@ -1,0 +1,47 @@
+# PyTorch
+--extra-index-url https://download.pytorch.org/whl/nightly/cu128
+--pre torch
+--pre torchaudio
+--pre torchvision
+torchinfo
+torchmetrics
+lightning[extra]
+tensordict-nightly
+torchrl-nightly
+
+# Experiment logging
+tensorboard
+# tb-nightly # For Numpy v2
+torch-tb-profiler
+tbparse
+
+# Data processing
+nvidia-pyindex
+nvidia-dali-cuda120
+nvidia-dlprof[pytorch] # dlprof <args> [training_script.py]
+
+# Data CPU processing
+numpy >= 2.0.0
+
+# Plotting
+matplotlib
+seaborn
+plotly
+ipympl
+adjustText 
+
+# Pretty printing
+tqdm
+typer
+jupyter
+rich
+
+# Data and code validation
+mypy
+pydantic
+pydantic-yaml
+
+# Audioset downloader
+joblib
+yt-dlp
+yt-dlp-youtube-oauth2
