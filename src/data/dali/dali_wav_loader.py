@@ -1,6 +1,5 @@
 from typing import List
 
-import lightning as pl
 import nvidia.dali.fn as fn
 import nvidia.dali.types as types
 import torch
@@ -197,30 +196,3 @@ def DaliAudioPipeline(
         reader_name="Reader",
         prepare_first_batch=True,
     )
-
-
-# PyTorch Lightning DataModule to use this dataset
-class WavDataModule(pl.LightningDataModule):
-    def __init__(self, file_paths: List[str], labels: List[str], batch_size: int = 4):
-        super(WavDataModule, self).__init__()
-        self.file_paths = file_paths
-        self.batch_size = batch_size
-        self.device_id = device_id
-        self.num_threads = num_threads
-        self.labels = [labels, labels]
-
-    def train_dataloader(self):
-        dali_iterator = DaliAudioPipeline(
-            files=self.file_paths,
-            labels=self.labels,
-            batch_size=self.batch_size,
-            target_sr=16000,
-            target_length=10,
-            num_threads=4,
-            shuffle=True,
-            local_rank=0,
-            global_rank=0,
-            world_size=1,
-        )
-
-        return dali_iterator

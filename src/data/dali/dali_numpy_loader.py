@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import List
 
-import lightning as pl
 import numpy as np
 import nvidia.dali.fn as fn
 import pandas as pd
@@ -21,13 +20,7 @@ class PyTorchIterator(DALIGenericIterator):
             labels (List[List[int]]): _description_
         """
         super().__init__(*kargs, **kvargs)
-        # self.labels = labels
-        # Convert numpy elements to normal data types
-        self.labels = [torch.tensor(label).squeeze(-1) for label in labels]
-
-        # self.labels = torch.tensor(labels) # Should this be moved to gpu already?
-        # biggest_dim = np.argmax(list(self.labels.shape)) # Biggest dimension should be number of files to be first
-        # self.labels = self.labels.movedim(biggest_dim, 0)
+        self.labels = labels
 
     def __next__(self):
         out = super().__next__()
@@ -38,10 +31,14 @@ class PyTorchIterator(DALIGenericIterator):
         # Convert int to string and then to int
         idcs = [int("".join(map(chr, row))) for row in out["label"]]
 
-        labels = [
-            self.labels[i][idcs].to(out["audio"].device)
-            for i in range(len(self.labels))
-        ]
+        # Get the labels based on the index
+        labels = []
+        for i in range(len(self.labels.columns)):
+            labels.append(
+                torch.tensor([self.labels[i][idcs[j]] for j in range(len(idcs))]).to(
+                    out["audio"].device
+                )
+            )
 
         # Get the label based on the index
         return out["audio"], labels
@@ -149,11 +146,9 @@ def DaliNumpyPipeline(
     filename_len = len(files[0].split("/")[-1])
 
     # Map the labels to the file index
-    # labels_dict = {}
-    # for idx, file in enumerate(files):
-    #     labels_dict[int(file[-filename_len:-4])] = [
-    #         torch.tensor(labels[i][idx]).squeeze(-1) for i in range(len(labels))
-    #     ]
+    labels_pd = pd.DataFrame(index=[int(file[-filename_len:-4]) for file in files])
+    for i, label in enumerate(labels):
+        labels_pd[i] = [labels[i][idx] for idx in range(len(labels[i]))]
 
     pipeline = numpy_data_pipeline(
         files=files,
@@ -177,50 +172,15 @@ def DaliNumpyPipeline(
     )
     pipeline.build()
 
-    # TODO How to get labels?
-    # img , labels = pipeline.run()
-    # print(img)
-    # print(labels)
-    # ascii_array = labels.at(0)
-    # decoded_string = ''.join(chr(value) for value in ascii_array)
-    # labels_array = labels.as_array()
-
     return PyTorchIterator(
         pipelines=[pipeline],
-        labels=labels,
+        labels=labels_pd,
         output_map=["audio", "label"],
         last_batch_policy=LastBatchPolicy.PARTIAL,
         auto_reset=True,
         reader_name="Reader",
         prepare_first_batch=True,
     )
-
-
-# PyTorch Lightning DataModule to use this dataset
-class NumpyDataModule(pl.LightningDataModule):
-    def __init__(self, file_paths: List[str], labels: List[str], batch_size: int = 4):
-        super(NumpyDataModule, self).__init__()
-        self.file_paths = file_paths
-        self.batch_size = batch_size
-        self.device_id = device_id
-        self.num_threads = num_threads
-        self.labels = [labels, labels]
-
-    def train_dataloader(self):
-        dali_iterator = DaliNumpyPipeline(
-            files=self.file_paths,
-            labels=self.labels,
-            batch_size=self.batch_size,
-            target_sr=16000,
-            target_length=10,
-            num_threads=4,
-            shuffle=True,
-            local_rank=0,
-            global_rank=0,
-            world_size=1,
-        )
-
-        return dali_iterator
 
 
 def preprocess_wav(
@@ -233,7 +193,6 @@ def preprocess_wav(
     num_files = len(data_loader) * data_loader.batch_size
 
     if meta_numpy_file.exists():
-        # meta_numpy = pd.read_csv(meta_numpy_file)
         meta_numpy = pd.read_pickle(meta_numpy_file)
         files_numpy = meta_numpy["file"].tolist()
     else:

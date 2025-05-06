@@ -22,6 +22,8 @@ nvidia-dlprof[pytorch] # dlprof <args> [training_script.py]
 
 # Data CPU processing
 numpy >= 2.0.0
+scipy
+scikit-learn
 
 # Plotting
 matplotlib
