@@ -2,10 +2,10 @@
 import sys
 from pathlib import Path
 
-import torch
 from torch.utils.data import DataLoader
 
 sys.path.append(str(Path(__file__).parents[1] / "src"))
+from config.configs import get_settings
 from data.audioset.audioset_dataset import AudiosetDataset
 from data.dali.dali_numpy_loader import DaliNumpyPipeline, preprocess_wav
 from data.dali.dali_wav_loader import DaliAudioPipeline
@@ -28,63 +28,14 @@ audioset_dataset = AudiosetDataset(
 files = audioset_dataset.wav_dataset.wavs
 meta = audioset_dataset.meta
 labels_keys = ["class", "class_logits"]
-
 epochs: int = 10
-batch_size: int = 32
-num_workers: int = -1
-prefetch_factor: int = 2
-target_sr: int = 16000
-target_audio_length: int = 10
-audio_slice_length: int | None = None
-mono: bool = True
 
-local_rank: int = 0
-global_rank: int = 0
-world_size: int = 1
-
-
-num_workers = (
-    num_workers
-    if num_workers is not None and num_workers != -1
-    else torch.multiprocessing.cpu_count() - 1
+data_loader_settings_dali, data_loader_settings_pytorch, dataset_settings = (
+    get_settings()
 )
-prefetch_factor = prefetch_factor if num_workers > 0 else None
-persistent_workers = True if num_workers > 0 else False
 
-data_loader_settings_dali = {
-    "batch_size": batch_size,
-    "num_threads": num_workers,
-    "prefetch_factor": prefetch_factor,
-    "shuffle": False,
-    "local_rank": local_rank,
-    "global_rank": global_rank,
-    "world_size": world_size,
-    "target_sr": target_sr,
-    "target_length": target_audio_length,
-    "mono": mono,
-    "random_crop_size": audio_slice_length,
-}
+labels = [meta[label].values.tolist() for label in labels_keys]
 
-data_loader_settings_pytorch = {
-    "batch_size": batch_size,
-    "num_workers": num_workers,
-    "prefetch_factor": prefetch_factor,
-    "shuffle": False,
-    "pin_memory": True,
-    "persistent_workers": persistent_workers,
-}
-
-dataset_settings = {
-    "target_sr": target_sr,
-    "target_length": target_audio_length,
-    "mono": mono,
-    "random_slice": False,
-    "audio_slice_length": audio_slice_length,
-    "audio_slice_overlap": None,
-    "check_silence": False,
-    "window_size": None,
-    "overlap": 0.5,
-}
 
 # %% Get storage size of all files combined
 get_data_size(files)
@@ -126,34 +77,101 @@ trainer = L.Trainer(
 # %% TorchAudioDataset
 torch_audio_dataset = TorchAudioDataset(
     files=files,
-    meta=meta,
-    labels=labels_keys,
+    labels=labels,
     **dataset_settings,
+)
+
+torch_audio_loader = DataLoader(
+    torch_audio_dataset,
+    **data_loader_settings_pytorch,
 )
 
 data_module = AudioDataModule(
     dataset=torch_audio_dataset,
     data_loader_class=DataLoader,
     data_loader_settings=data_loader_settings_pytorch,
+    data_path=data_path,
+    labels_keys=labels_keys,
 )
-data_module.setup("fit")
+
+# %%
+trainer.fit_loop.epoch_progress.reset()
+trainer.fit(
+    model,
+    datamodule=data_module,
+)
+
+# %% MemmapDataset
+from data.torch.tensordirct_loader import TensorDictMemmapDataset
+
+memmap_path = TensorDictMemmapDataset.prepare_data(
+    data_path=data_path,
+    data_loader=torch_audio_loader,
+)
+
+memmap_dataset = TensorDictMemmapDataset(
+    memmap_path=memmap_path,
+)
+data_module = AudioDataModule(
+    dataset=memmap_dataset,
+    data_loader_class=DataLoader,
+    data_loader_settings=data_loader_settings_pytorch,
+    data_path=data_path,
+    labels_keys=labels_keys,
+)
+
+# %%
+trainer.fit_loop.epoch_progress.reset()
+trainer.fit(
+    model,
+    datamodule=data_module,
+)
+
+# %% MemmapDataset
+from data.numpy.numpy_memmap_loader import NumpyMemmapDataset
+
+pickle_path = NumpyMemmapDataset.prepare_data(
+    data_path=data_path,
+    data_loader=torch_audio_loader,
+)
+
+memmap_dataset = NumpyMemmapDataset(
+    pickle_path=pickle_path,
+)
+data_module = AudioDataModule(
+    dataset=memmap_dataset,
+    data_loader_class=DataLoader,
+    data_loader_settings=data_loader_settings_pytorch,
+    data_path=data_path,
+    labels_keys=labels_keys,
+)
+
+# %%
+trainer.fit_loop.epoch_progress.reset()
+trainer.fit(
+    model,
+    datamodule=data_module,
+)
+
 
 # %% DaliAudioPipeline
-labels = [meta[label].values.tolist() for label in labels_keys]
-
 data_module = AudioDataModule(
     files=files,
     labels=labels,
     data_loader_class=DaliAudioPipeline,
     data_loader_settings=data_loader_settings_dali,
+    data_path=data_path,
+    labels_keys=labels_keys,
 )
-data_module.setup("fit")
+
+# %%
+trainer.fit_loop.epoch_progress.reset()
+trainer.fit(
+    model,
+    datamodule=data_module,
+)
 
 # %% DaliNumpyPipeline
-torch_audio_loader = DataLoader(
-    torch_audio_dataset,
-    **data_loader_settings_pytorch,
-)
 meta_numpy = preprocess_wav(
     data_loader=torch_audio_loader, data_path=data_path, labels_keys=labels_keys
 )
@@ -165,10 +183,12 @@ data_module = AudioDataModule(
     labels=labels_numpy,
     data_loader_class=DaliNumpyPipeline,
     data_loader_settings=data_loader_settings_dali | {"direct_store": True},
+    data_path=data_path,
+    labels_keys=labels_keys,
 )
-data_module.setup("fit")
 
 # %%
+trainer.fit_loop.epoch_progress.reset()
 trainer.fit(
     model,
     datamodule=data_module,

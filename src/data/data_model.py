@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import lightning as L
 import torch
 from sklearn.model_selection import train_test_split
@@ -9,6 +11,8 @@ class AudioDataModule(L.LightningDataModule):
         self,
         data_loader_class: type,
         data_loader_settings: dict,
+        data_path: Path,
+        labels_keys: list[str],
         files: list[str] | None = None,
         labels: list[list[int]] | None = None,
         dataset: torch.utils.data.Dataset | None = None,
@@ -19,17 +23,18 @@ class AudioDataModule(L.LightningDataModule):
         self.labels = labels
         self.dataset = dataset
         self.validation_split = validation_split
-
-        if dataset is None and files is None:
-            raise ValueError("Either dataset or files must be provided.")
+        self.data_path = data_path
+        self.labels_keys = labels_keys
 
         self.data_loader_class = data_loader_class
         self.data_loader_settings = data_loader_settings
 
         if files is not None:
             idcs = list(range(len(files)))
-        else:
+        elif dataset is not None:
             idcs = list(range(len(dataset)))
+        else:
+            raise ValueError("Either dataset or files must be provided.")
 
         if dataset is not None:
             self.train_dataset, self.val_dataset = random_split(
@@ -59,6 +64,9 @@ class AudioDataModule(L.LightningDataModule):
             self.train_labels = None
             self.val_labels = None
 
+        pass
+
+    def prepare_data(self):
         pass
 
     def setup(self, stage: str):

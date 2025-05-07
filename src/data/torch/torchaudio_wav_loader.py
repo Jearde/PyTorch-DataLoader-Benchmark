@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pandas as pd
 import torch
 
 from data.wav_dataset import WAVDataset
@@ -10,8 +9,7 @@ class TorchAudioDataset(WAVDataset):
     def __init__(
         self,
         files: list[str | Path],
-        meta: pd.DataFrame,
-        labels: list[str] = ["class"],
+        labels: list[list[int]],
         **kwargs,
     ):
         """
@@ -23,8 +21,7 @@ class TorchAudioDataset(WAVDataset):
         """
         super().__init__(wav_files=files, **kwargs)
         self.files = files
-        self.meta = meta
-        self.labels = labels
+        self.labels = [torch.tensor(label).squeeze(-1) for label in labels]
 
     def __getitem__(self, idx):
         """
@@ -39,11 +36,6 @@ class TorchAudioDataset(WAVDataset):
         # Get the audio waveform and sample rate
         audio = super().__getitem__(idx)
 
-        # Get the metadata for the current index
-        meta = self.meta.iloc[idx]
-
-        # Create a dictionary to hold the metadata
-        # labels = {label: meta[label] for label in self.labels}
-        labels = [torch.tensor(meta[label]) for label in self.labels]
+        labels = [self.labels[i][idx].to(audio.device) for i in range(len(self.labels))]
 
         return audio, labels
