@@ -17,9 +17,30 @@ def test_data_loader(data_loader, epochs: int):
 
 
 import lightning as L
+import nvidia_smi
 import torch
+from lightning.pytorch.callbacks import Callback
 
 from model.dummy_model import DummyModel
+
+
+class GPUUtilizationCallback(Callback):
+    def __init__(self, log_frequency=1):
+        super().__init__()
+        self.log_frequency = log_frequency
+        nvidia_smi.nvmlInit()
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if batch_idx % self.log_frequency == 0:
+            handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+            res = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
+            mem = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+
+            # Log metrics to Lightning
+            pl_module.log("gpu_utilization", res.gpu)
+            pl_module.log("gpu_memory_utilization", res.memory)
+            pl_module.log("gpu_memory_free_gb", mem.free / (1024**3))
+            pl_module.log("gpu_memory_used_gb", mem.used / (1024**3))
 
 
 class DataLoaderBenchmark:
@@ -59,7 +80,8 @@ class DataLoaderBenchmark:
             callbacks=[
                 L.pytorch.callbacks.RichProgressBar(refresh_rate=10),
                 # L.pytorch.callbacks.RichModelSummary(max_depth=-1),
-                L.pytorch.callbacks.DeviceStatsMonitor(),
+                # L.pytorch.callbacks.DeviceStatsMonitor(),
+                GPUUtilizationCallback(log_frequency=1),
             ],
             enable_model_summary=False,
             # logger=True,
