@@ -19,6 +19,7 @@ tbparse
 nvidia-pyindex
 nvidia-dali-cuda120
 nvidia-dlprof[pytorch] # dlprof <args> [training_script.py]
+nvidia-ml-py3
 webdataset
 
 # Data CPU processing

@@ -34,7 +34,7 @@ audioset_dataset = AudiosetDataset(
 files = audioset_dataset.wav_dataset.wavs
 meta = audioset_dataset.meta
 labels_keys = ["class", "class_logits"]
-epochs: int = 1
+epochs: int = 10
 
 data_loader_settings_dali, data_loader_settings_pytorch, dataset_settings = (
     get_settings()
@@ -76,22 +76,6 @@ time_torchaudio = dataloader_benchmark.run(
     name="TorchAudioDataset",
 )
 
-# %% WebDatasetPyTorch
-data_module = WebDatasetDataModule(
-    data_path=Path("/mnt/data/data/audioset/eval/"),
-    data_loader=torch_audio_loader,
-    urls=None,
-    validation_split=0.2,
-    seed=42,
-    **data_loader_settings_pytorch,
-)
-data_module.prepare_data()
-
-# %%
-time_webdataset = dataloader_benchmark.run(
-    data_module=data_module,
-    name="WebDataset",
-)
 # %% MemmapDataset
 from data.torch.tensordirct_loader import TensorDictMemmapDataset
 
@@ -115,6 +99,23 @@ data_module = AudioDataModule(
 time_tensordict_memmap = dataloader_benchmark.run(
     data_module=data_module,
     name="TensorDictMemmapDataset",
+)
+
+# %% WebDatasetPyTorch
+data_module = WebDatasetDataModule(
+    data_path=Path("/mnt/data/data/audioset/eval/"),
+    data_loader=torch_audio_loader,
+    urls=None,
+    validation_split=0.2,
+    seed=42,
+    **data_loader_settings_pytorch,
+)
+data_module.prepare_data()
+
+# %%
+time_webdataset = dataloader_benchmark.run(
+    data_module=data_module,
+    name="WebDataset",
 )
 
 # %% MemmapDataset

@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     inkscape \
     nano \
+    fonts-humor-sans \
     && rm -rf /var/lib/apt/lists/*
 
 # Install kubectl
@@ -110,6 +111,11 @@ RUN add-apt-repository ppa:deadsnakes/ppa && apt-get update && apt-get install -
 
 RUN echo "**** Continue as user ****"
 USER $USERNAME
+
+RUN curl -sL https://github.com/ipython/xkcd-font/raw/master/xkcd/build/xkcd.otf -o ~/.local/share/fonts/xkcd.otf
+RUN curl -sL https://github.com/ipython/xkcd-font/raw/master/xkcd-script/font/xkcd-script.ttf -o ~/.local/share/fonts/xkcd-script.ttf
+RUN fc-cache -f -v
+RUN rm ~/.cache/matplotlib/*
 
 RUN echo "**** Installing Python packages (cached) ****"
 RUN python${PYTHON_VERSION} -m venv /env
