@@ -14,6 +14,7 @@ from data.dali.dali_numpy_loader import DaliNumpyPipeline, preprocess_wav
 from data.dali.dali_wav_loader import DaliAudioPipeline
 from data.data_model import AudioDataModule
 from data.torch.torchaudio_wav_loader import TorchAudioDataset
+from data.webdataset.webdataset_torch_module import WebDatasetDataModule
 from utils.logger import get_data_size
 
 # %%
@@ -45,10 +46,16 @@ get_data_size(files)
 
 # %% Get Lightning Module
 import lightning as L
+import torch
 
 from model.dummy_model import DummyModel
 
+tb_logger = L.pytorch.loggers.TensorBoardLogger(save_dir="logs/", max_queue=1000)
+
+torch.set_float32_matmul_precision("high")
+
 model = DummyModel(input_shape=[1, 160000], num_classes=2)
+model = torch.compile(model)
 
 devices = 1  # -1 for using all available GPUs with DDP
 
@@ -69,9 +76,10 @@ trainer = L.Trainer(
     callbacks=[
         L.pytorch.callbacks.RichProgressBar(refresh_rate=10),
         L.pytorch.callbacks.RichModelSummary(max_depth=-1),
+        L.pytorch.callbacks.DeviceStatsMonitor(),
     ],
-    logger=False,
-    # logger=[tb_logger, mlflow_logger],
+    # logger=True,
+    logger=[tb_logger],
     strategy="ddp_find_unused_parameters_true"
     if devices > 1 or devices == -1
     else "auto",
@@ -108,23 +116,15 @@ end = time.time()
 time_torchaudio = end - start
 
 # %% WebDatasetPyTorch
-urls = WebAudioDataset.prepare_data(
+data_module = WebDatasetDataModule(
     data_path=Path("/mnt/data/data/audioset/eval/"),
     data_loader=torch_audio_loader,
+    urls=None,
+    validation_split=0.2,
+    seed=42,
+    **data_loader_settings_pytorch,
 )
-
-webdataset_dataset = WebAudioDataset(
-    urls=urls,
-    data_length=len(torch_audio_loader.dataset),
-)
-
-data_module = AudioDataModule(
-    dataset=webdataset_dataset.dataset,
-    data_loader_class=DataLoader,
-    data_loader_settings=data_loader_settings_pytorch,
-    data_path=data_path,
-    labels_keys=labels_keys,
-)
+data_module.prepare_data()
 
 # %%
 trainer.fit_loop.epoch_progress.reset()

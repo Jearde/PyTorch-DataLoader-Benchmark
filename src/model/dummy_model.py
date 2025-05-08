@@ -1,4 +1,5 @@
 import logging
+import time
 
 import lightning as L
 import torch
@@ -87,3 +88,16 @@ class DummyModel(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
         return [optimizer], [scheduler]
+
+    def on_train_epoch_start(self):
+        self.epoch_start_time = time.time()
+
+    def on_train_epoch_end(self):
+        elapsed_time = time.time() - self.epoch_start_time
+        self.log(
+            "train_epoch_time",
+            elapsed_time,
+            prog_bar=True,
+            logger=True,
+            on_epoch=True,
+        )

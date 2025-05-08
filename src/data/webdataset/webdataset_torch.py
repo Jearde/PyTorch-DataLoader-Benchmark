@@ -88,16 +88,19 @@ class WebAudioDataset:
         self.shuffle_buffer = shuffle_buffer
         self.tuple_fields = tuple_fields
         self.preprocess = lambda x: x if preprocess is None else preprocess(x)
+        self.total_length = data_length
 
-        self.dataset = wds.DataPipeline(
+    def get_data_pipeline(self, data_length: int = None, selector=None):
+        pipeline = wds.DataPipeline(
             wds.SimpleShardList(self.urls),
             # at this point we have an iterator over all the shards
             # this shuffles the shards
             wds.shuffle(self.shuffle_shards),
-            # add wds.split_by_node here if you are using multiple nodes
+            wds.split_by_node,  # if you are using multiple nodes
             wds.split_by_worker,
             # at this point, we have an iterator over the shards assigned to each worker
             wds.tarfile_to_samples(),
+            wds.select(selector),
             # this shuffles the samples in memory
             wds.shuffle(self.shuffle_buffer),
             # this decodes the images and json
@@ -109,15 +112,9 @@ class WebAudioDataset:
         )
 
         if data_length is not None:
-            self.dataset = self.dataset.with_length(data_length)
+            self.dataset = pipeline.with_length(data_length)
 
-        loader = wds.WebLoader(self.dataset, num_workers=4, batch_size=None)
-        self.loader = (
-            loader.unbatched().shuffle(self.shuffle_buffer).batched(self.batch_size)
-        )
-
-        batch = next(iter(self.loader))
-        batch[0].shape, batch[-1][-1].shape
+        return pipeline
 
     @classmethod
     def prepare_data(cls, data_path: Path, data_loader: DataLoader):
