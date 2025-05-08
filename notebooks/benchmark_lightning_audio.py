@@ -9,11 +9,11 @@ from torch.utils.data import DataLoader
 sys.path.append(str(Path(__file__).parents[1] / "src"))
 from config.configs import get_settings
 from data.audioset.audioset_dataset import AudiosetDataset
+from data.dali.dali_external_numpy_loader import DaliNumpyExternalPipeline
 from data.dali.dali_numpy_loader import DaliNumpyPipeline, preprocess_wav
 from data.dali.dali_wav_loader import DaliAudioPipeline
 from data.data_model import AudioDataModule
 from data.torch.torchaudio_wav_loader import TorchAudioDataset
-from data.webdataset.webdataset_torch import WebAudioDataset
 from utils.logger import get_data_size
 
 # %%
@@ -126,6 +126,7 @@ data_module = AudioDataModule(
     labels_keys=labels_keys,
 )
 
+# %%
 trainer.fit_loop.epoch_progress.reset()
 start = time.time()
 trainer.fit(
@@ -240,6 +241,26 @@ trainer.fit(
 end = time.time()
 time_numpy = end - start
 
+# %% DaliNumpyExternalPipeline
+data_module = AudioDataModule(
+    files=files_numpy,
+    labels=labels_numpy,
+    data_loader_class=DaliNumpyExternalPipeline,
+    data_loader_settings=data_loader_settings_dali,
+    data_path=data_path,
+    labels_keys=labels_keys,
+)
+
+# %%
+trainer.fit_loop.epoch_progress.reset()
+start = time.time()
+trainer.fit(
+    model,
+    datamodule=data_module,
+)
+end = time.time()
+time_dali_numpy_external = end - start
+
 # %% Print results
 results_df = pd.DataFrame(
     {
@@ -250,6 +271,7 @@ results_df = pd.DataFrame(
             "DaliAudioPipeline",
             "DaliNumpyPipeline",
             "WebDataset",
+            "DaliNumpyExternalPipeline",
         ],
         "Time (s)": [
             time_torchaudio,
@@ -258,6 +280,7 @@ results_df = pd.DataFrame(
             time_dali_wav,
             time_numpy,
             time_webdataset,
+            time_dali_numpy_external,
         ],
     }
 )

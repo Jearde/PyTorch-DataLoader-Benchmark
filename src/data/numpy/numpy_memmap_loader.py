@@ -144,6 +144,10 @@ class NumpyMemmapDataset(torch.utils.data.Dataset):
             data_path.parents[0] / (data_path.name + "_memmap") / "numpy_memmap.pkl"
         )
 
+        if pickle_path.exists():
+            logger.info(f"Memmap already exists: {pickle_path}")
+            return pickle_path
+
         logger.info(f"Creating memmap: {pickle_path}")
         save_memmap_stream(
             chunk_iter=data_loader,
