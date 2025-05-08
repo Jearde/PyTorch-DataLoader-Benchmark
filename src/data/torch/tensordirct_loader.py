@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tensordict import TensorDict
 from torch.utils.data import DataLoader
-from torchrl.data import LazyMemmapStorage, ReplayBuffer
+from torchrl.data import LazyMemmapStorage
 from tqdm.auto import tqdm
 
 logger = logging.getLogger(__name__)
@@ -24,10 +24,10 @@ def save_memmap_stream(
         device=device,
         existsok=True,
     )
-    buffer = ReplayBuffer(storage=storage, device=device)
+    # buffer = ReplayBuffer(storage=storage)
 
     rows_written = 0
-    for batch in tqdm(chunk_iter, desc="Writing memmap", unit="batch"):
+    for batch in tqdm(chunk_iter, desc="Writing TensorDict memmap", unit="batch"):
         td = TensorDict(
             {
                 "x": batch[0],
@@ -37,11 +37,11 @@ def save_memmap_stream(
         for i, y in enumerate(batch[1]):
             td[f"label_{i}"] = y
 
-        buffer.extend(td)
+        # buffer.extend(td)
+        storage.set(range(rows_written, rows_written + len(batch[0])), td)
         rows_written += len(batch[0])
 
-    storage.dump()
-
+    storage.dump(memmap_path)
     return memmap_path
 
 
@@ -76,12 +76,22 @@ class TensorDictMemmapDataset(torch.utils.data.Dataset):
                 "Memmap file not found. Please run the prepare_data method first."
             )
 
-        self.data, self.meta = load_memmap(pickle_path=self.memmap_path)
-        self.labels_keys = [key for key in self.meta.keys() if key.startswith("label_")]
+        self.storage = LazyMemmapStorage(
+            max_size=0, scratch_dir=memmap_path, existsok=True
+        )
+        self.storage.load(memmap_path)
+
+        self.labels_keys = [
+            key for key in self.storage[0].keys() if key.startswith("label_")
+        ]
 
     @classmethod
     def prepare_data(cls, data_path: Path, data_loader: DataLoader):
         memmap_path = data_path.parents[0] / (data_path.name + "_memmap") / "tensordict"
+
+        if memmap_path.exists():
+            logger.info(f"Memmap already exists: {memmap_path}")
+            return memmap_path
 
         logger.info(f"Creating memmap: {memmap_path}")
         save_memmap_stream(
@@ -93,10 +103,10 @@ class TensorDictMemmapDataset(torch.utils.data.Dataset):
         return memmap_path
 
     def __len__(self) -> int:
-        return len(self.data)
+        return len(self.storage)
 
     def __getitem__(self, idx):
-        feature = torch.from_numpy(self.data[idx].copy()).to(torch.float32)
-        labels = [self.meta[key][idx] for key in self.labels_keys]
+        feature = self.storage[idx]["x"]
+        labels = [self.storage[idx][key] for key in self.labels_keys]
 
         return feature, labels
