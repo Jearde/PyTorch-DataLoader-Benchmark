@@ -29,22 +29,25 @@ class Identity(nn.Module):
 
 
 class DummyModel(L.LightningModule):
-    def __init__(self, input_shape, num_classes=2):
+    def __init__(self, input_shape, num_classes=2, max_len=16000):
         super().__init__()
         self.save_hyperparameters()
 
         # Layer that just returns the input
         # self.layer = Identity()
 
+        input_len = input_shape[-1] if max_len is None else max_len
+        self.max_len = max_len if max_len is not None else input_len
+
         # simple linear autoencoder
         self.model = nn.Sequential(
-            nn.Linear(input_shape[-1], 64),
+            nn.Linear(input_len, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
             nn.Linear(32, 64),
             nn.ReLU(),
-            nn.Linear(64, input_shape[-1]),
+            nn.Linear(64, input_len),
         )
 
     def forward(self, x):
@@ -52,6 +55,7 @@ class DummyModel(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
+        x = x[:, :, : self.max_len]
         y_hat = self(x)
         loss = F.mse_loss(y_hat, x)
         self.log("train_loss", loss)
@@ -59,6 +63,7 @@ class DummyModel(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
+        x = x[:, :, : self.max_len]
         y_hat = self(x)
         loss = F.mse_loss(y_hat, x)
         self.log("val_loss", loss, prog_bar=True)
@@ -66,6 +71,7 @@ class DummyModel(L.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch
+        x = x[:, : self.max_len]
         y_hat = self(x)
         loss = F.mse_loss(y_hat, x)
         self.log("test_loss", loss)
@@ -73,6 +79,7 @@ class DummyModel(L.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         x, _ = batch
+        x = x[:, :, : self.max_len]
         y_hat = self(x)
         return y_hat
 
