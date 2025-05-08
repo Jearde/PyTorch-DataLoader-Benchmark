@@ -78,10 +78,11 @@ rub_colors = [
     tuple(gray),
 ]
 matplotlib.rcParams["axes.prop_cycle"] = cycler(color=rub_colors)
+plt.xkcd()
 font_path = "/usr/share/fonts/truetype/humor-sans/Humor-Sans.ttf"
 prop = fm.FontProperties(fname=font_path)
 plt.rcParams["font.family"] = prop.get_name()
-plt.xkcd()
+
 
 if EXPORT_PGF:
     matplotlib.use("pgf")
@@ -100,6 +101,7 @@ else:
             "svg.fonttype": "none",
         }
     )
+
 
 # %%
 ROOT_PATH = Path(__file__).parents[1]
@@ -146,6 +148,8 @@ for name, tb_folder in tb_folders.items():
 benchmark_results = pd.read_csv(
     ROOT_PATH / "logs" / "benchmark_results.csv", index_col=0
 )
+
+benchmark_results
 
 # %% Bar Chart
 fig, ax = plt.subplots(figsize=(8, 4))
