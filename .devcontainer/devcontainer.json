@@ -70,7 +70,7 @@
         "source=/home/${localEnv:USER}/.kube,target=/home/python-user/.kube,type=bind,consistency=cached", // Mount Kubeconfig
 		"source=/home/${localEnv:USER}/.gitconfig,target=/home/python-user/.gitconfig,type=bind,consistency=cached", // Mount git config
 		"source=${localEnv:HOME}/data,target=/mnt/data,type=bind,consistency=cached", // Mount data folder in home
-		"source=/mnt/nvme_nfs,target=/mnt/data,type=bind,consistency=cached", // Mount data folder in home
+		// "source=/mnt/nvme_nfs,target=/mnt/nvme_nfs,type=bind,consistency=cached", // Mount data folder in home
 	],
 
 	// Use these settings if running in privileged mode and multiple GPUs are available.

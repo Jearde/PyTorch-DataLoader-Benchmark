@@ -1,6 +1,5 @@
 # %%
 import sys
-import time
 from pathlib import Path
 
 import pandas as pd
@@ -15,7 +14,10 @@ from data.dali.dali_wav_loader import DaliAudioPipeline
 from data.data_model import AudioDataModule
 from data.torch.torchaudio_wav_loader import TorchAudioDataset
 from data.webdataset.webdataset_torch_module import WebDatasetDataModule
-from utils.logger import get_data_size
+from utils.logger import get_data_size, print_stats
+
+# %%
+print_stats()
 
 # %%
 data_path = Path("/mnt/data/data/audioset/eval/")
@@ -32,7 +34,7 @@ audioset_dataset = AudiosetDataset(
 files = audioset_dataset.wav_dataset.wavs
 meta = audioset_dataset.meta
 labels_keys = ["class", "class_logits"]
-epochs: int = 10
+epochs: int = 1
 
 data_loader_settings_dali, data_loader_settings_pytorch, dataset_settings = (
     get_settings()
@@ -45,45 +47,9 @@ labels = [meta[label].values.tolist() for label in labels_keys]
 get_data_size(files)
 
 # %% Get Lightning Module
-import lightning as L
-import torch
+from utils.benchmark import DataLoaderBenchmark
 
-from model.dummy_model import DummyModel
-
-tb_logger = L.pytorch.loggers.TensorBoardLogger(save_dir="logs/", max_queue=1000)
-
-torch.set_float32_matmul_precision("high")
-
-model = DummyModel(input_shape=[1, 160000], num_classes=2)
-model = torch.compile(model)
-
-devices = 1  # -1 for using all available GPUs with DDP
-
-trainer = L.Trainer(
-    max_epochs=epochs,
-    accelerator="auto",
-    devices=devices,  # -1 for using all available GPUs with DDP
-    num_nodes=1,
-    precision=32,
-    log_every_n_steps=50,
-    deterministic=False,
-    benchmark=None,
-    fast_dev_run=False,
-    plugins=None,
-    enable_checkpointing=False,
-    enable_progress_bar=True,
-    profiler="simple",  # e.g. "simple", "pytorch", "advanced"
-    callbacks=[
-        L.pytorch.callbacks.RichProgressBar(refresh_rate=10),
-        L.pytorch.callbacks.RichModelSummary(max_depth=-1),
-        L.pytorch.callbacks.DeviceStatsMonitor(),
-    ],
-    # logger=True,
-    logger=[tb_logger],
-    strategy="ddp_find_unused_parameters_true"
-    if devices > 1 or devices == -1
-    else "auto",
-)
+dataloader_benchmark = DataLoaderBenchmark(epochs=epochs, devices=1)
 
 # %% TorchAudioDataset
 torch_audio_dataset = TorchAudioDataset(
@@ -105,15 +71,10 @@ data_module = AudioDataModule(
     labels_keys=labels_keys,
 )
 
-# %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_torchaudio = dataloader_benchmark.run(
+    data_module=data_module,
+    name="TorchAudioDataset",
 )
-end = time.time()
-time_torchaudio = end - start
 
 # %% WebDatasetPyTorch
 data_module = WebDatasetDataModule(
@@ -127,15 +88,10 @@ data_module = WebDatasetDataModule(
 data_module.prepare_data()
 
 # %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_webdataset = dataloader_benchmark.run(
+    data_module=data_module,
+    name="WebDataset",
 )
-end = time.time()
-time_webdataset = end - start
-
 # %% MemmapDataset
 from data.torch.tensordirct_loader import TensorDictMemmapDataset
 
@@ -156,14 +112,10 @@ data_module = AudioDataModule(
 )
 
 # %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_tensordict_memmap = dataloader_benchmark.run(
+    data_module=data_module,
+    name="TensorDictMemmapDataset",
 )
-end = time.time()
-time_tensordict_memmap = end - start
 
 # %% MemmapDataset
 from data.numpy.numpy_memmap_loader import NumpyMemmapDataset
@@ -185,14 +137,10 @@ data_module = AudioDataModule(
 )
 
 # %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_numpy_memmap = dataloader_benchmark.run(
+    data_module=data_module,
+    name="NumpyMemmapDataset",
 )
-end = time.time()
-time_numpy_memmap = end - start
 
 
 # %% DaliAudioPipeline
@@ -206,14 +154,10 @@ data_module = AudioDataModule(
 )
 
 # %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_dali_wav = dataloader_benchmark.run(
+    data_module=data_module,
+    name="DaliAudioPipeline",
 )
-end = time.time()
-time_dali_wav = end - start
 
 # %% DaliNumpyPipeline
 meta_numpy = preprocess_wav(
@@ -232,14 +176,10 @@ data_module = AudioDataModule(
 )
 
 # %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_numpy = dataloader_benchmark.run(
+    data_module=data_module,
+    name="DaliNumpyPipeline",
 )
-end = time.time()
-time_numpy = end - start
 
 # %% DaliNumpyExternalPipeline
 data_module = AudioDataModule(
@@ -252,14 +192,10 @@ data_module = AudioDataModule(
 )
 
 # %%
-trainer.fit_loop.epoch_progress.reset()
-start = time.time()
-trainer.fit(
-    model,
-    datamodule=data_module,
+time_dali_numpy_external = dataloader_benchmark.run(
+    data_module=data_module,
+    name="DaliNumpyExternalPipeline",
 )
-end = time.time()
-time_dali_numpy_external = end - start
 
 # %% Print results
 results_df = pd.DataFrame(
@@ -293,6 +229,9 @@ results_df["Speed (samples/s)"] = results_df["Speed (samples/s)"].round(2)
 results_df["Time (s)"] = results_df["Time (s)"].round(2)
 results_df = results_df.sort_values(by="Speed (samples/s)", ascending=False)
 print(results_df)
+
+# %% Save results
+results_df.to_csv("logs/benchmark_results.csv", index=True)
 
 # %%
 pass
