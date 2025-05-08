@@ -1,8 +1,6 @@
 import logging
-import pickle
 from pathlib import Path
 
-import numpy as np
 import torch
 from tensordict import TensorDict
 from torch.utils.data import DataLoader
@@ -43,22 +41,6 @@ def save_memmap_stream(
 
     storage.dump(memmap_path)
     return memmap_path
-
-
-def load_memmap(pickle_path=None):
-    logger.info(f"Loading features from memmap: {pickle_path}")
-    with open(pickle_path, "rb") as f:
-        meta_data = pickle.load(f)
-
-    memmap_path = Path(meta_data["mm_path"])
-    data_shape = meta_data["mm_shape"]
-    data_dtype = meta_data["mm_dtype"]
-
-    features_memmap = np.memmap(
-        memmap_path, dtype=data_dtype, mode="r", shape=data_shape
-    )
-
-    return features_memmap, meta_data
 
 
 class TensorDictMemmapDataset(torch.utils.data.Dataset):

@@ -31,7 +31,7 @@ def write_wds(chunk_iter, out_dir, maxcount=10_000, compression=None):
                     {
                         "__key__": key,
                         "x.npy": features[i].numpy(),
-                        "x.pyd": torch.as_tensor(features[i]),
+                        # "x.pyd": torch.as_tensor(features[i]),
                         "y.cls": int(labels[0][i]),
                         "ylists.json": json.dumps(label_dict).encode("utf-8"),
                     }
