@@ -1,7 +1,9 @@
 # %%
 import sys
+import time
 from pathlib import Path
 
+import pandas as pd
 from torch.utils.data import DataLoader
 
 sys.path.append(str(Path(__file__).parents[1] / "src"))
@@ -11,6 +13,7 @@ from data.dali.dali_numpy_loader import DaliNumpyPipeline, preprocess_wav
 from data.dali.dali_wav_loader import DaliAudioPipeline
 from data.data_model import AudioDataModule
 from data.torch.torchaudio_wav_loader import TorchAudioDataset
+from data.webdataset.webdataset_torch import WebAudioDataset
 from utils.logger import get_data_size
 
 # %%
@@ -96,10 +99,41 @@ data_module = AudioDataModule(
 
 # %%
 trainer.fit_loop.epoch_progress.reset()
+start = time.time()
 trainer.fit(
     model,
     datamodule=data_module,
 )
+end = time.time()
+time_torchaudio = end - start
+
+# %% WebDatasetPyTorch
+urls = WebAudioDataset.prepare_data(
+    data_path=Path("/mnt/data/data/audioset/eval/"),
+    data_loader=torch_audio_loader,
+)
+
+webdataset_dataset = WebAudioDataset(
+    urls=urls,
+    data_length=len(torch_audio_loader.dataset),
+)
+
+data_module = AudioDataModule(
+    dataset=webdataset_dataset.dataset,
+    data_loader_class=DataLoader,
+    data_loader_settings=data_loader_settings_pytorch,
+    data_path=data_path,
+    labels_keys=labels_keys,
+)
+
+trainer.fit_loop.epoch_progress.reset()
+start = time.time()
+trainer.fit(
+    model,
+    datamodule=data_module,
+)
+end = time.time()
+time_webdataset = end - start
 
 # %% MemmapDataset
 from data.torch.tensordirct_loader import TensorDictMemmapDataset
@@ -122,10 +156,13 @@ data_module = AudioDataModule(
 
 # %%
 trainer.fit_loop.epoch_progress.reset()
+start = time.time()
 trainer.fit(
     model,
     datamodule=data_module,
 )
+end = time.time()
+time_tensordict_memmap = end - start
 
 # %% MemmapDataset
 from data.numpy.numpy_memmap_loader import NumpyMemmapDataset
@@ -148,10 +185,13 @@ data_module = AudioDataModule(
 
 # %%
 trainer.fit_loop.epoch_progress.reset()
+start = time.time()
 trainer.fit(
     model,
     datamodule=data_module,
 )
+end = time.time()
+time_numpy_memmap = end - start
 
 
 # %% DaliAudioPipeline
@@ -166,10 +206,13 @@ data_module = AudioDataModule(
 
 # %%
 trainer.fit_loop.epoch_progress.reset()
+start = time.time()
 trainer.fit(
     model,
     datamodule=data_module,
 )
+end = time.time()
+time_dali_wav = end - start
 
 # %% DaliNumpyPipeline
 meta_numpy = preprocess_wav(
@@ -182,17 +225,51 @@ data_module = AudioDataModule(
     files=files_numpy,
     labels=labels_numpy,
     data_loader_class=DaliNumpyPipeline,
-    data_loader_settings=data_loader_settings_dali | {"direct_store": True},
+    data_loader_settings=data_loader_settings_dali | {"direct_store": False},
     data_path=data_path,
     labels_keys=labels_keys,
 )
 
 # %%
 trainer.fit_loop.epoch_progress.reset()
+start = time.time()
 trainer.fit(
     model,
     datamodule=data_module,
 )
+end = time.time()
+time_numpy = end - start
+
+# %% Print results
+results_df = pd.DataFrame(
+    {
+        "Dataset": [
+            "TorchAudioDataset",
+            "TensorDictMemmapDataset",
+            "NumpyMemmapDataset",
+            "DaliAudioPipeline",
+            "DaliNumpyPipeline",
+            "WebDataset",
+        ],
+        "Time (s)": [
+            time_torchaudio,
+            time_tensordict_memmap,
+            time_numpy_memmap,
+            time_dali_wav,
+            time_numpy,
+            time_webdataset,
+        ],
+    }
+)
+results_df["Speed (samples/s)"] = (
+    (results_df["Time (s)"].sum() / results_df["Time (s)"])
+    * len(files)
+    / results_df["Time (s)"]
+)
+results_df["Speed (samples/s)"] = results_df["Speed (samples/s)"].round(2)
+results_df["Time (s)"] = results_df["Time (s)"].round(2)
+results_df = results_df.sort_values(by="Speed (samples/s)", ascending=False)
+print(results_df)
 
 # %%
 pass
