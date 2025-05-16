@@ -11,6 +11,8 @@ This repository contains a benchmark for PyTorch DataLoader using different data
 For testing, PyTorch Lightning with a 2.1M parameter model (linear autoencoder) is used to simulate a real-world scenario without putting the bottleneck on preprocessing or GPU training.
 The benchmark is designed to be extensible, allowing for easy addition of new data loading strategies and configurations.
 
+Slides of the [PDSC3K](https://skunkforce.org/pdsc3k) Talk can be found here: [How fast can you go? - PyTorch (Audio) DataLoader](https://docs.google.com/presentation/d/1ZE19MCjcEgdmuSpU9kxYvuXNF0LT1XroJ_p15hlz4Vw/edit?usp=sharing)
+
 ## Getting Started
 ### Prerequisites
 It's recommended to use this repository with the provided Development Container. This ensures that all dependencies are installed and configured correctly.
